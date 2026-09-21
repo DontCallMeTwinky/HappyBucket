@@ -1,0 +1,11 @@
+cupcakes=1
+escaped=false
+chapter=4
+ending=
+goblinHealth=65
+coins=3
+playerHealth=100
+daysLeft=1
+gameOver=false
+inventory=Bakery Key
+energy=4
