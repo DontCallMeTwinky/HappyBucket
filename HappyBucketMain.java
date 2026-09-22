@@ -20,6 +20,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
 import javax.swing.BorderFactory;
+import javax.swing.AbstractAction;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -28,6 +29,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
@@ -39,7 +41,7 @@ public class HappyBucketMain {
     private final Set<String> inventory = new LinkedHashSet<>();
     private final GameAudio gameAudio = new GameAudio();
 
-    private int daysLeft = 5;
+    private int daysLeft = 7;
     private int cupcakes = 0;
     private int energy = 3;
     private int coins = 0;
@@ -83,6 +85,11 @@ public class HappyBucketMain {
     private int xp = 0;
     private int xpToNext = 12;
     private int statPoints = 0;
+    private boolean platformerActive = false;
+    private int platformerX = 40;
+    private int platformerY = 120;
+    private int platformerVelocityY = 0;
+    private boolean platformerOnGround = false;
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
@@ -143,7 +150,7 @@ public class HappyBucketMain {
     private void buildWindow() {
         frame = new JFrame("Happy Bucket: Last Cupcake");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(980, 720);
+        frame.setSize(1040, 800);
         frame.setLocationRelativeTo(null);
 
         JPanel root = new JPanel();
@@ -151,7 +158,7 @@ public class HappyBucketMain {
         root.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
 
         titleLabel = new JLabel("HAPPY BUCKET: LAST CUPCAKE", JLabel.CENTER);
-        titleLabel.setFont(titleLabel.getFont().deriveFont(24f));
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 28f));
         titleLabel.setAlignmentX(JLabel.CENTER_ALIGNMENT);
 
         JPanel scenePanel = new JPanel();
@@ -162,6 +169,20 @@ public class HappyBucketMain {
         sceneCanvas = new PixelScenePanel();
         sceneCanvas.setPreferredSize(new Dimension(900, 180));
         sceneCanvas.setBackground(new Color(34, 32, 39));
+        sceneCanvas.setFocusable(true);
+        sceneCanvas.getInputMap().put(KeyStroke.getKeyStroke("LEFT"), "platformLeft");
+        sceneCanvas.getInputMap().put(KeyStroke.getKeyStroke("RIGHT"), "platformRight");
+        sceneCanvas.getInputMap().put(KeyStroke.getKeyStroke("SPACE"), "platformJump");
+        sceneCanvas.getInputMap().put(KeyStroke.getKeyStroke("UP"), "platformJump");
+        sceneCanvas.getActionMap().put("platformLeft", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) { movePlatformer(-18); }
+        });
+        sceneCanvas.getActionMap().put("platformRight", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) { movePlatformer(18); }
+        });
+        sceneCanvas.getActionMap().put("platformJump", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) { jumpPlatformer(); }
+        });
         sceneCanvas.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -171,15 +192,24 @@ public class HappyBucketMain {
         scenePanel.add(sceneCanvas);
 
         statLabel = new JLabel();
-        statLabel.setFont(statLabel.getFont().deriveFont(14f));
-        statLabel.setBorder(BorderFactory.createEmptyBorder(8, 0, 8, 0));
+        statLabel.setFont(statLabel.getFont().deriveFont(Font.BOLD, 15f));
+        statLabel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(120, 110, 100), 1),
+            BorderFactory.createEmptyBorder(8, 10, 8, 10)
+        ));
+        statLabel.setOpaque(true);
+        statLabel.setBackground(new Color(50, 43, 52));
+        statLabel.setForeground(new Color(245, 235, 220));
 
         objectiveLabel = new JLabel();
-        objectiveLabel.setFont(objectiveLabel.getFont().deriveFont(13f));
+        objectiveLabel.setFont(objectiveLabel.getFont().deriveFont(Font.BOLD, 15f));
         objectiveLabel.setForeground(new Color(255, 212, 120));
+        objectiveLabel.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
 
         inventoryLabel = new JLabel();
-        inventoryLabel.setFont(inventoryLabel.getFont().deriveFont(14f));
+        inventoryLabel.setFont(inventoryLabel.getFont().deriveFont(Font.BOLD, 15f));
+        inventoryLabel.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+        inventoryLabel.setForeground(new Color(220, 230, 255));
 
         JPanel dialoguePanel = new JPanel(new java.awt.BorderLayout(12, 0));
         dialoguePanel.setBorder(BorderFactory.createTitledBorder("Dialogue"));
@@ -195,11 +225,11 @@ public class HappyBucketMain {
         dialogueTextWrap.setOpaque(false);
 
         dialogueSpeakerLabel = new JLabel("Bucket");
-        dialogueSpeakerLabel.setFont(dialogueSpeakerLabel.getFont().deriveFont(Font.BOLD, 13f));
+        dialogueSpeakerLabel.setFont(dialogueSpeakerLabel.getFont().deriveFont(Font.BOLD, 16f));
         dialogueSpeakerLabel.setForeground(new Color(255, 220, 150));
 
         dialogueTextLabel = new JLabel("The bucket hums in the dark. The wasteland listens.");
-        dialogueTextLabel.setFont(dialogueTextLabel.getFont().deriveFont(12f));
+        dialogueTextLabel.setFont(dialogueTextLabel.getFont().deriveFont(15f));
         dialogueTextLabel.setForeground(new Color(240, 235, 220));
         dialogueTextLabel.setAlignmentX(JLabel.LEFT_ALIGNMENT);
 
@@ -214,13 +244,22 @@ public class HappyBucketMain {
         JButton searchButton = new JButton("Search Ruins");
         JButton restButton = new JButton("Rest");
         JButton shopButton = new JButton("Bakery Shop");
-        JButton fightButton = new JButton("Fight Goblin");
-        JButton inspectButton = new JButton("Inspect Gear");
+        JButton fightButton = new JButton("Fight Twinkleberry");
+        JButton inspectButton = new JButton("Inspect Items");
         JButton escapeButton = new JButton("Escape");
-        JButton craftButton = new JButton("Craft Gear");
+        JButton craftButton = new JButton("Craft Items");
         JButton saveButton = new JButton("Save");
         JButton loadButton = new JButton("Load");
         JButton newGameButton = new JButton("New Game");
+
+        JButton[] actionButtons = {
+            searchButton, restButton, shopButton, fightButton, inspectButton,
+            escapeButton, craftButton, saveButton, loadButton, newGameButton
+        };
+        for (JButton actionButton : actionButtons) {
+            actionButton.setFont(actionButton.getFont().deriveFont(Font.BOLD, 14f));
+            actionButton.setFocusPainted(false);
+        }
 
         searchButton.addActionListener(e -> handleChoice(1));
         restButton.addActionListener(e -> handleChoice(2));
@@ -246,10 +285,12 @@ public class HappyBucketMain {
 
         logArea = new JTextArea();
         logArea.setEditable(false);
-        logArea.setRows(18);
+        logArea.setRows(20);
         logArea.setLineWrap(true);
         logArea.setWrapStyleWord(true);
-        logArea.setFont(new java.awt.Font("Monospaced", java.awt.Font.PLAIN, 13));
+        logArea.setFont(new java.awt.Font("Monospaced", java.awt.Font.PLAIN, 15));
+        logArea.setForeground(new Color(245, 240, 225));
+        logArea.setBackground(new Color(30, 27, 36));
 
         JScrollPane scrollPane = new JScrollPane(logArea);
         scrollPane.setBorder(BorderFactory.createTitledBorder("Story"));
@@ -502,7 +543,7 @@ public class HappyBucketMain {
         if (playerHealth <= 0 && !escaped) {
             gameOver = true;
             ending = "boss";
-            appendLog("The goblin tears through your last defenses. The bucket wins.");
+            appendLog("Twinkleberry tears through your last defenses. The bucket wins.");
         }
 
         if (daysLeft > 0) {
@@ -528,14 +569,28 @@ public class HappyBucketMain {
     }
 
     private void refreshStats() {
-        statLabel.setText("Level " + level + " | XP " + xp + "/" + xpToNext + " | Chapter " + chapter + " | Location: " + currentLocation + " | Days left: " + daysLeft + " | Cupcakes: " + cupcakes + "/" + MAX_CUPCAKES + " | Energy: " + energy + " | Health: " + playerHealth + " | Coins: " + coins);
-        objectiveLabel.setText("Objective: " + objective + (statPoints > 0 ? " | Unspent upgrades: " + statPoints : ""));
-        inventoryLabel.setText("Inventory: " + (inventory.isEmpty() ? "empty" : String.join(", ", inventory)) + " | Zone: " + currentLocation);
+        statLabel.setText(
+            "Level " + level + "  |  XP " + xp + "/" + xpToNext +
+            "  |  Chapter " + chapter +
+            "  |  Location: " + currentLocation +
+            "  |  Days: " + daysLeft +
+            "  |  Cupcakes: " + cupcakes + "/" + MAX_CUPCAKES +
+            "  |  Energy: " + energy +
+            "  |  Health: " + playerHealth +
+            "  |  Coins: " + coins
+        );
+        objectiveLabel.setText("Objective: " + objective + (statPoints > 0 ? "  |  Upgrades: " + statPoints : ""));
+        inventoryLabel.setText("Inventory: " + (inventory.isEmpty() ? "empty" : String.join(", ", inventory)) + "  |  Zone: " + currentLocation);
+        statLabel.setToolTipText(statLabel.getText());
+        objectiveLabel.setToolTipText(objectiveLabel.getText());
+        inventoryLabel.setToolTipText(inventoryLabel.getText());
     }
 
     private void refreshScene() {
         if (sceneCanvas != null) {
-            if (travelAnimating) {
+            if (platformerActive) {
+                advancePlatformer();
+            } else if (travelAnimating) {
                 advanceTravelAnimation();
             }
             if (introActive) {
@@ -562,6 +617,76 @@ public class HappyBucketMain {
         return new int[] {x, y};
     }
 
+    private void startPlatformer() {
+        platformerActive = true;
+        platformerX = 40;
+        platformerY = 120;
+        platformerVelocityY = 0;
+        platformerOnGround = true;
+        appendLog("The dungeon floor drops away into a platforming challenge.");
+        appendLog("Use Left/Right to run and Up or Space to jump. Reach the golden door.");
+        sceneCanvas.requestFocusInWindow();
+        refreshScene();
+    }
+
+    private void movePlatformer(int amount) {
+        if (!platformerActive || gameOver || escaped) {
+            return;
+        }
+        platformerX = Math.max(20, Math.min(860, platformerX + amount));
+        refreshScene();
+    }
+
+    private void jumpPlatformer() {
+        if (platformerActive && platformerOnGround) {
+            platformerVelocityY = -12;
+            platformerOnGround = false;
+            playToneEffect(760, 70, 0.16);
+        }
+    }
+
+    private void advancePlatformer() {
+        if (platformerOnGround) {
+            return;
+        }
+
+        int previousY = platformerY;
+        platformerVelocityY++;
+        platformerY += platformerVelocityY;
+        platformerOnGround = false;
+
+        int[][] platforms = {
+            {20, 145, 180}, {260, 120, 110}, {430, 95, 110}, {620, 125, 120}, {800, 90, 80}
+        };
+        for (int[] platform : platforms) {
+            boolean crossingTop = previousY + 16 <= platform[1] && platformerY + 16 >= platform[1];
+            boolean overlaps = platformerX + 18 >= platform[0] && platformerX <= platform[0] + platform[2];
+            if (platformerVelocityY >= 0 && crossingTop && overlaps) {
+                platformerY = platform[1] - 16;
+                platformerVelocityY = 0;
+                platformerOnGround = true;
+                break;
+            }
+        }
+
+        if (platformerY > 180) {
+            platformerX = 40;
+            platformerY = 120;
+            platformerVelocityY = 0;
+            playerHealth = Math.max(1, playerHealth - 5);
+            appendLog("You fall into the frosting pit and scramble back to the entrance.");
+        }
+
+        if (platformerX >= 825) {
+            platformerActive = false;
+            coins += 3;
+            addCupcake();
+            gainXp(8);
+            appendLog("You clear the dungeon platforms and claim the golden cupcake cache.");
+            refreshStats();
+        }
+    }
+
     private class PixelScenePanel extends JPanel {
         private static final long serialVersionUID = 1L;
 
@@ -576,7 +701,7 @@ public class HappyBucketMain {
             "...F..F..."
         };
 
-        private final String[] GOBLIN_SPRITE = {
+        private final String[] TWINKLEBERRY_SPRITE = {
             "..GG..GG..",
             ".GGGGGGGG.",
             ".GHHHHHGG.",
@@ -617,12 +742,16 @@ public class HappyBucketMain {
             g2.setColor(new Color(28, 24, 34));
             g2.fillRect(0, 0, getWidth(), getHeight());
 
-            drawBackground(g2);
-            drawBucket(g2);
-            drawPlayer(g2);
-            drawCupcakes(g2);
+            if (platformerActive) {
+                drawPlatformer(g2);
+            } else {
+                drawBackground(g2);
+                drawBucket(g2);
+                drawPlayer(g2);
+                drawCupcakes(g2);
+            }
             if (!gameOver && !escaped) {
-                drawGoblin(g2);
+                drawTwinkleberry(g2);
                 drawBossBar(g2);
             }
             if (escaped || gameOver) {
@@ -633,6 +762,38 @@ public class HappyBucketMain {
             }
 
             g2.dispose();
+        }
+
+        private void drawPlatformer(Graphics2D g2) {
+            g2.setColor(new Color(47, 28, 58));
+            g2.fillRect(0, 0, getWidth(), getHeight());
+            g2.setColor(new Color(100, 55, 110));
+            for (int i = 0; i < 14; i++) {
+                g2.fillOval((i * 83 + 20) % 900, 35 + (i % 3) * 22, 5, 5);
+            }
+
+            int[][] platforms = {
+                {20, 145, 180}, {260, 120, 110}, {430, 95, 110}, {620, 125, 120}, {800, 90, 80}
+            };
+            g2.setColor(new Color(226, 174, 86));
+            for (int[] platform : platforms) {
+                g2.fillRect(platform[0], platform[1], platform[2], 10);
+                g2.setColor(new Color(132, 76, 83));
+                g2.fillRect(platform[0], platform[1] + 10, platform[2], 8);
+                g2.setColor(new Color(226, 174, 86));
+            }
+
+            g2.setColor(new Color(255, 226, 108));
+            g2.fillRect(830, 48, 28, 42);
+            g2.setColor(new Color(76, 45, 70));
+            g2.fillOval(848, 67, 5, 5);
+            drawIsoMarker(g2, platformerX, platformerY + 8, 24, 18,
+                new Color(255, 210, 120), new Color(110, 90, 255), new Color(255, 145, 95));
+            g2.setColor(new Color(255, 235, 180));
+            g2.setFont(new java.awt.Font("Monospaced", java.awt.Font.BOLD, 14));
+            g2.drawString("CRUMB DUNGEON: FUNHOUSE RUN", 250, 22);
+            g2.setFont(new java.awt.Font("Monospaced", java.awt.Font.PLAIN, 12));
+            g2.drawString("Reach the golden door", 365, 174);
         }
 
         private void drawIntroOverlay(Graphics2D g2) {
@@ -718,10 +879,21 @@ public class HappyBucketMain {
             drawIsoMarker(g2, playerScreen[0] + offsetX, playerScreen[1] - 6, 26, 18, new Color(255, 210, 120), new Color(110, 90, 255), new Color(255, 145, 95));
         }
 
-        private void drawGoblin(Graphics2D g2) {
-            int[] goblinScreen = projectToScreen(3, 1);
+        private void drawTwinkleberry(Graphics2D g2) {
+            int[] bossScreen = projectToScreen(3, 1);
             int offsetX = (animationFrame % 2 == 0) ? 0 : 5;
-            drawIsoMarker(g2, goblinScreen[0] + offsetX, goblinScreen[1] - 6, 26, 18, new Color(120, 220, 110), new Color(90, 120, 75), new Color(150, 55, 35));
+            int x = bossScreen[0] + offsetX;
+            int y = bossScreen[1] - 6;
+
+            g2.setColor(new Color(140, 115, 70));
+            g2.fillRect(x - 10, y - 28, 6, 12);
+            g2.fillRect(x + 4, y - 28, 6, 12);
+            g2.setColor(new Color(110, 220, 120));
+            drawIsoMarker(g2, x, y, 26, 18, new Color(120, 220, 110), new Color(90, 120, 75), new Color(150, 55, 35));
+            g2.setColor(new Color(210, 185, 120));
+            g2.fillOval(x - 6, y - 16, 12, 8);
+            g2.setColor(new Color(65, 45, 30));
+            g2.fillRect(x - 2, y + 7, 4, 10);
         }
 
         private void drawCupcakes(Graphics2D g2) {
@@ -792,10 +964,15 @@ public class HappyBucketMain {
     }
 
     private void resetGame() {
-        daysLeft = 5;
+        daysLeft = 7;
         cupcakes = 0;
         energy = 3;
         coins = 0;
+        platformerActive = false;
+        platformerX = 40;
+        platformerY = 120;
+        platformerVelocityY = 0;
+        platformerOnGround = false;
         chapter = 1;
         escaped = false;
         gameOver = false;
@@ -874,7 +1051,7 @@ public class HappyBucketMain {
         }
         if (daysLeft <= 2 && chapter < 4) {
             chapter = 4;
-            appendLog("Chapter 4: The Goblin's Shadow");
+            appendLog("Chapter 4: Twinkleberry's Shadow");
             appendLog("Twinkleberry is close. Her candy-star crown glows in the dark.");
         }
         if (daysLeft <= 1 && chapter < 5) {
@@ -887,6 +1064,11 @@ public class HappyBucketMain {
     private void searchRuins() {
         if (energy <= 0) {
             appendLog("You are too exhausted to move.");
+            return;
+        }
+
+        if ("Crumb Dungeon".equals(currentLocation) && !platformerActive) {
+            startPlatformer();
             return;
         }
 
@@ -1059,11 +1241,11 @@ public class HappyBucketMain {
         if (playerHealth <= 0) {
             gameOver = true;
             ending = "boss";
-            appendLog("Your health gives out under the goblin's attack. The bucket wins.");
+            appendLog("Your health gives out under Twinkleberry's attack. The bucket wins.");
         }
 
         if (goblinHealth <= 0) {
-            appendLog("The boss is gone. You can now push for the exit.");
+            appendLog("Twinkleberry is gone. You can now push for the exit.");
         }
     }
 

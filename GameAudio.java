@@ -15,31 +15,38 @@ public class GameAudio {
 
         for (int i = 0; i < totalSamples; i++) {
             double time = i / AUDIO_SAMPLE_RATE;
-            double wave = frequency > 0 ? Math.sin(2.0 * Math.PI * frequency * time) : 0.0;
+            double phase = 2.0 * Math.PI * frequency * time;
+            double squareWave = Math.signum(Math.sin(phase));
+            double pulse = 0.72 + 0.28 * Math.sin(phase * 2.0);
+            double wave = frequency > 0 ? squareWave * pulse : 0.0;
             double envelope = 1.0 - ((double) i / totalSamples);
-            data[i] = (byte) (wave * volume * 127.0 * envelope);
+            double stepped = Math.round(wave * volume * 127.0 * envelope / 8.0) * 8.0;
+            data[i] = (byte) Math.max(-128, Math.min(127, stepped));
         }
 
         return data;
     }
 
     public byte[] createBackgroundLoop() {
-        int[] melody = {220, 220, 277, 330, 392, 330, 277, 262, 220, 196, 174, 196};
-        int[] bass = {55, 55, 73, 73, 82, 82, 73, 73, 55, 55, 49, 49};
-        int[] harmony = {330, 392, 440, 392, 330, 294, 262, 294, 330, 392, 440, 392};
-        int noteDuration = 120;
+        int[] melody = {220, 277, 330, 392, 330, 277, 262, 220, 247, 330, 392, 440, 392, 330, 277, 220};
+        int[] bass = {55, 55, 73, 73, 82, 82, 73, 55, 55, 73, 73, 82, 82, 73, 55, 49};
+        int[] harmony = {330, 392, 440, 392, 330, 294, 262, 330, 392, 440, 392, 330, 294, 262, 294, 330};
+        int[] arpeggio = {659, 587, 523, 659, 587, 523, 466, 392, 523, 587, 659, 587, 523, 494, 440, 392};
+        int noteDuration = 100;
         ByteArrayOutputStream out = new ByteArrayOutputStream();
 
         for (int i = 0; i < melody.length; i++) {
-            byte[] bassData = createToneData(bass[i], noteDuration, 0.07);
-            byte[] melodyData = createToneData(melody[i], noteDuration, 0.11);
+            byte[] bassData = createToneData(bass[i], noteDuration, 0.08);
+            byte[] melodyData = createToneData(melody[i], noteDuration, 0.12);
             byte[] harmonyData = createToneData(harmony[i], noteDuration / 2, 0.05);
+            byte[] arpeggioData = createToneData(arpeggio[i], noteDuration / 3, 0.04);
 
             out.write(bassData, 0, bassData.length);
             out.write(melodyData, 0, melodyData.length);
+            out.write(arpeggioData, 0, arpeggioData.length);
             out.write(harmonyData, 0, harmonyData.length);
 
-            byte[] rest = createToneData(0, 25, 0.0);
+            byte[] rest = createToneData(0, 18, 0.0);
             out.write(rest, 0, rest.length);
         }
 
